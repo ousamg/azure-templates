@@ -1,9 +1,8 @@
 #!/bin/bash -e
 
-# This script can be found on https://github.com/Azure/azure-quickstart-templates/blob/master/slurm/azuredeploy.sh
+# This script can be found on https://github.com/ous/azure-templates/blob/master/slurm/azuredeploy.sh
 # This script is part of azure deploy ARM template
-# This script assumes the Linux distribution to be Ubuntu (or at least have apt-get support)
-# This script will install SLURM on a Linux cluster deployed on a set of Azure VMs
+# This script will install SLURM on a CentOS 7 cluster deployed on a set of Azure VMs
 
 # Basic info
 export DEPLOY_LOG=/tmp/azuredeploy.log.$$
