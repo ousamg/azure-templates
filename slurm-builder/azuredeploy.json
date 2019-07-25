@@ -212,7 +212,7 @@
           ],
           "copy": {
               "name": "nicLoop",
-              "count": "[parameters('scaleNumber')]"
+              "count": 2
           },
           "properties": {
               "ipConfigurations": [
@@ -237,10 +237,6 @@
           "dependsOn": [
               "nicLoop"
           ],
-          "copy": {
-              "name": "foo",
-              "count": "[parameters('scaleNumber')]"
-          },
           "properties": {
               "hardwareProfile": {
                   "vmSize": "[parameters('vmSize')]"
