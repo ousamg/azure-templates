@@ -4,12 +4,103 @@
 # This script is part of azure deploy ARM template
 # This script will install SLURM on a CentOS 7 cluster deployed on a set of Azure VMs
 
-# Basic info
+# Parameters
+export MASTER_NAME=$1
+export WORKER_NAME=$2
+export TEMPLATE_BASE=$3
+
 export DEPLOY_LOG=/tmp/azuredeploy.log.$$
 export SLURM_HOSTS=/tmp/hosts.$$
 
+# Software versions
+JAVA_VERSION=1.8.0
+
+SLURM_VERSION=18.08.5-2     # pinned to TSD
+SLURM_URL=https://download.schedmd.com/slurm
+SLURM_PKG=slurm-${SLURM_VERSION}.tar.bz2
+
+SINGULARITY_VERSION=2.6.1
+SINGULARITY_URL=https://github.com/singularityware/singularity/releases/download/${SINGULARITY_VERSION}
+SINGULARITY_PKG=singularity-${SINGULARITY_VERSION}.tar.gz
+
+R_VERSION=3.3.2
+R_URL=https://cran.r-project.org/src/base/R-3/
+R_PKG=R-${R_VERSION}.tar.gz
+
+# install functions
+is_master() {
+    hostname | grep "$MASTER_NAME"
+    return $?
+}
+
+install_prereqs() {
+    yum install epel-release -y
+    yum install -y openssl openssl-devel pam-devel numactl numactl-devel hwloc hwloc-devel lua lua-devel \
+        readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortrain \
+        perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk \
+        java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel
+
+    wget $SINGULARITY_URL/$SINGULARITY_PKG
+    tar xvf $SINGULARITY_PKG
+    pushd singularity-${SINGULARITY_VERSION}
+    ./configure --prefix=/usr/local
+    make && make install
+    popd
+
+    echo "Succesfully installed singularity v$(singularity --version)"
+
+    wget $R_URL/$R_PKG
+    tar xvf $R_PKG
+    pushd R-${R_VERSION}
+    export JAVA_HOME=/etc/alternatives/java_sdk
+    ./configure --with-x=no CFLAGS="-mtune=native -g -O2"
+    make
+    make install
+    popd
+
+    echo "Successfully installed $(R --version | head -1)"
+}
+
+install_munge() {
+    MUNGE_UID=991
+    MUNGE_USER=munge
+    MUNGE_GROUP=munge
+    groupadd -g $MUNGE_UID $MUNGE_GROUP
+    useradd -m -c "MUNGE Uid 'N' Gid Emporium" -d /var/lib/munge -u $MUNGE_UID -g $MUNGE_GROUP  -s /sbin/nologin $MUNGE_USER
+
+    yum install -y munge-devel munge-libs munge
+    systemctl enable munge
+}
+
+install_slurm() {
+    SLURM_UID=992
+    SLURM_USER=slurm
+    SLURM_GROUP=slurm
+    SLURM_RPMS=$(pwd)/slurm-rpms
+    groupadd -g $SLURM_UID $SLURM_GROUP
+    useradd  -m -c "SLURM workload manager" -d /var/lib/slurm -u $SLURM_UID -g $SLURM_GROUP -s /bin/bash $SLURM_USER
+
+    SLURM_DIRS="/var/spool/slurmctld /var/spool/slurmd /var/log/slurm"
+    mkdir -p $SLURM_DIRS
+    chmod 755 $SLURM_DIRS
+    chown -R $SLURM_USER:$SLURM_GROUP $SLURM_DIRS
+
+    wget $SLURM_URL/$SLURM_PKG
+    rpmbuild -ta $SLURM_PKG --define "_rpmdir $SLURM_RPMS"
+    yum localinstall -y $SLURM_RPMS/x86_64/*.rpm
+
+
+    if is_master; then
+        systemctl enable slurmctld.service
+    else
+        systemctl enable slurmd.service
+    fi
+}
+
+# Ready go!
+###################################
+
 date > $DEPLOY_LOG 2>&1
-whoami >> $DEPLOY_LOG 2>&1
 echo "$@" >> $DEPLOY_LOG 2>&1
 pwd >> $DEPLOY_LOG 2>&1
 
@@ -19,85 +110,10 @@ if [ "$#" -ne 9 ]; then
   exit 1
 fi
 
-# Preparation steps - hosts and ssh
-###################################
+install_prereqs >> $DEPLOY_LOG 2>&1
 
-# Parameters
-export MASTER_NAME=$1
-export MASTER_IP=$2
-export WORKER_NAME=$3
-export WORKER_IP_BASE=$4
-export WORKER_IP_START=$5
-export NUM_OF_VM=$6
-export ADMIN_USERNAME=$7
-export ADMIN_PASSWORD=$8
-export TEMPLATE_BASE=$9
+install_munge >> $DEPLOY_LOG 2>&1
 
-# Update master node
-echo $MASTER_IP $MASTER_NAME >> /etc/hosts
-echo $MASTER_IP $MASTER_NAME > $SLURM_HOSTS
+install_slurm >> $DEPLOY_LOG 2>&1
 
-# Update ssh config file to ignore unknow host
-# Note all settings are for azureuser, NOT root
-sudo -u $ADMIN_USERNAME sh -c "mkdir /home/$ADMIN_USERNAME/.ssh/;echo Host worker\* > /home/$ADMIN_USERNAME/.ssh/config; echo StrictHostKeyChecking no >> /home/$ADMIN_USERNAME/.ssh/config; echo UserKnownHostsFile=/dev/null >> /home/$ADMIN_USERNAME/.ssh/config"
-
-# Generate a set of sshkey under /honme/azureuser/.ssh if there is not one yet
-if ! [ -f /home/$ADMIN_USERNAME/.ssh/id_rsa ]; then
-    sudo -u $ADMIN_USERNAME sh -c "ssh-keygen -f /home/$ADMIN_USERNAME/.ssh/id_rsa -t rsa -N ''"
-fi
-
-# nopasswd sudo for admin user, disabled at the end
-sed -i 's/ALL$/NOPASSWD:ALL/' /etc/sudoers.d/waagent
-
-# Set filename vars
-export RPM_TAR=/tmp/slurm-rpms.tar
-export MUNGEKEY=/tmp/munge.key.$$
-export SLURM_CONF=/tmp/slurm.conf.$$
-export BOOTSTRAP_EXE=bootstrap_node.sh
-cp $BOOTSTRAP_EXE /tmp/$BOOTSTRAP_EXE
-chmod 755 /tmp/$BOOTSTRAP_EXE
-
-# Install sshpass to automate ssh-copy-id action
-sudo yum install sshpass -y >> $DEPLOY_LOG 2>&1
-
-# Loop through all worker nodes, update hosts file and copy ssh public key to it
-# The script make the assumption that the node is called $WORKER+<index> and have
-# static IP in sequence order
-LAST_VM=$(expr $NUM_OF_VM - 1)
-export LAST_VM
-for i in $(seq 0 $LAST_VM); do
-   workerip=$(expr $i + $WORKER_IP_START)
-   echo 'Updating host - '$WORKER_NAME$i >> $DEPLOY_LOG 2>&1
-   echo $WORKER_IP_BASE$workerip $WORKER_NAME$i >> $SLURM_HOSTS
-   echo $WORKER_IP_BASE$workerip $WORKER_NAME$i >> /etc/hosts
-   sudo -u $ADMIN_USERNAME sh -c "sshpass -p '$ADMIN_PASSWORD' ssh-copy-id $WORKER_NAME$i"
-   # set passwordless sudo so we can install stuff
-   sudo -u $ADMIN_USERNAME ssh $WORKER_NAME$i "echo $ADMIN_PASSWORD | sudo -S sed -i 's/ALL\$/NOPASSWD:ALL/' /etc/sudoers.d/waagent"
-done
-
-# Install everything on master node
-echo "Installing on master node" >> $DEPLOY_LOG 2>&1
-bash $BOOTSTRAP_EXE master >> $DEPLOY_LOG 2>&1
-
-echo "Looping over worker nodes" >> $DEPLOY_LOG 2>&1
-for i in $(seq 0 $LAST_VM); do
-   worker=$WORKER_NAME$i
-
-   echo "SCP to $worker"  >> $DEPLOY_LOG 2>&1
-   sudo -u $ADMIN_USERNAME scp $MUNGEKEY $SLURM_CONF $SLURM_HOSTS $RPM_TAR "/tmp/$BOOTSTRAP_EXE" $worker:/tmp/ >> $DEPLOY_LOG 2>&1
-
-   echo "Remote execute on $worker" >> $DEPLOY_LOG 2>&1
-   # update /etc/hosts with slurm nodes, install everything, then disable passwordless sudo
-   # have to set MUNGEKEY and SLURM_CONF in block because it's not evaluating the globs for some reason?
-sudo -u $ADMIN_USERNAME ssh $ADMIN_USERNAME@$worker << ENDSSH1
-    sudo bash -c 'cat $SLURM_HOSTS >> /etc/hosts'
-    sudo -E bash /tmp/$BOOTSTRAP_EXE
-    sudo sed -i 's/NOPASSWD://' /etc/sudoers.d/waagent
-ENDSSH1
-done
-
-rm -f $MUNGEKEY
-# re-enable password for sudo
-sed -i 's/NOPASSWD://' /etc/sudoers.d/waagent
-
-echo "$(date) finished bootstrapping $NUM_OF_VM nodes"
+echo "$(date) Completed provisioning node $(hostname)" >> $DEPLOY_LOG 2>&1

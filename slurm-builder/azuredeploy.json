@@ -18,14 +18,7 @@
           "type": "string",
           "defaultValue": "Standard_D1_v2",
           "metadata": {
-              "description": "Size of the nodes."
-          }
-      },
-      "scaleNumber": {
-          "type": "int",
-          "defaultValue": 2,
-          "metadata": {
-              "description": "This template create N worker node. Use scaleNumber to specify that N."
+              "description": "Size of the nodes"
           }
       },
       "_artifactsLocation": {
@@ -33,7 +26,7 @@
           "metadata": {
               "description": "The base URI where artifacts required by this template are located. When the template is deployed using the accompanying scripts, a private location in the subscription will be used and this value will be automatically generated."
           },
-          "defaultValue": "https://raw.githubusercontent.com/ousamg/azure-templates/master/slurm"
+          "defaultValue": "https://raw.githubusercontent.com/ousamg/azure-templates/master/slurm-builder"
       },
       "_artifactsLocationSasToken": {
           "type": "securestring",
@@ -79,7 +72,7 @@
           }
       },
       "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets/', variables('networkSettings').virtualNetworkName, variables('networkSettings').subnet.dse.name)]",
-      "installationCLI": "[concat('bash azuredeploy.sh ', variables('vmNameMaster'), ' ', variables('networkSettings').statics.master, ' ', variables('vmNameWorker'), ' ', variables('networkSettings').statics.workerRange.base, ' ', variables('networkSettings').statics.workerRange.start, ' ', parameters('scaleNumber'), ' ', parameters('adminUsername'), ' ', parameters('adminPassword'), ' ', parameters('_artifactsLocation'))]"
+      "installationCLI": "[concat('bash azuredeploy.sh ', variables('vmNameMaster'), ' ', variables('vmNameWorker'), ' ', parameters('_artifactsLocation'))]"
   },
   "resources": [
       {
@@ -199,8 +192,7 @@
                       "autoUpgradeMinorVersion": true,
                       "settings": {
                           "fileUris": [
-                              "[concat(parameters('_artifactsLocation'), '/azuredeploy.sh', parameters('_artifactsLocationSasToken'))]",
-                              "[concat(parameters('_artifactsLocation'), '/bootstrap_node.sh', parameters('_artifactsLocationSasToken'))]"
+                              "[concat(parameters('_artifactsLocation'), '/azuredeploy.sh', parameters('_artifactsLocationSasToken'))]"
                           ]
                       },
                       "protectedSettings": {
@@ -240,7 +232,7 @@
       {
           "apiVersion": "2017-03-30",
           "type": "Microsoft.Compute/virtualMachines",
-          "name": "[concat(variables('vmNameWorker'), copyindex())]",
+          "name": "[concat(variables('vmNameWorker'))]",
           "location": "[parameters('location')]",
           "dependsOn": [
               "nicLoop"
@@ -254,7 +246,7 @@
                   "vmSize": "[parameters('vmSize')]"
               },
               "osProfile": {
-                  "computerName": "[concat(variables('vmNameWorker'), copyindex())]",
+                  "computerName": "[concat(variables('vmNameWorker'))]",
                   "adminUsername": "[parameters('adminUsername')]",
                   "adminPassword": "[parameters('adminPassword')]"
               },
@@ -281,7 +273,32 @@
                       }
                   ]
               }
-          }
+          },
+          "resources": [
+              {
+                  "apiVersion": "2017-03-30",
+                  "type": "extensions",
+                  "name": "Installation",
+                  "location": "[parameters('location')]",
+                  "dependsOn": [
+                      "[variables('vmNameWorker')]"
+                  ],
+                  "properties": {
+                      "publisher": "Microsoft.Azure.Extensions",
+                      "type": "CustomScript",
+                      "typeHandlerVersion": "2.0",
+                      "autoUpgradeMinorVersion": true,
+                      "settings": {
+                          "fileUris": [
+                              "[concat(parameters('_artifactsLocation'), '/azuredeploy.sh', parameters('_artifactsLocationSasToken'))]"
+                          ]
+                      },
+                      "protectedSettings": {
+                          "commandToExecute": "[variables('installationCLI')]"
+                      }
+                  }
+              }
+          ]
       }
   ],
   "outputs": {
