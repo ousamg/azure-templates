@@ -1,4 +1,6 @@
-#!/bin/bash -e
+#!/bin/bash
+
+set -xeuo pipefail
 
 # This script can be found on https://github.com/ous/azure-templates/blob/master/slurm/azuredeploy.sh
 # This script is part of azure deploy ARM template
@@ -36,7 +38,7 @@ is_master() {
 install_prereqs() {
     yum install epel-release -y
     yum install -y openssl openssl-devel pam-devel numactl numactl-devel hwloc hwloc-devel lua lua-devel \
-        readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortrain \
+        readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortran \
         perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk \
         java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel
 
