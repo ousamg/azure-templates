@@ -29,6 +29,10 @@ R_VERSION=3.3.2
 R_URL=https://cran.r-project.org/src/base/R-3/
 R_PKG=R-${R_VERSION}.tar.gz
 
+if [[ $(echo $PATH | grep -c local/bin) -eq 0 ]]; then
+    export PATH="$PATH:/usr/local/bin"
+fi
+
 # install functions
 is_master() {
     hostname | grep "$MASTER_NAME"
@@ -39,7 +43,7 @@ install_prereqs() {
     yum install epel-release -y
     yum install -y openssl openssl-devel pam-devel numactl numactl-devel hwloc hwloc-devel lua lua-devel \
         readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortran \
-        perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk \
+        perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk libcurl-devel \
         java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel
     yum update -y --exclude=WALinuxAgent
 
