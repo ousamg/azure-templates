@@ -105,8 +105,8 @@ echo "$@" >> $DEPLOY_LOG 2>&1
 pwd >> $DEPLOY_LOG 2>&1
 
 # Usage
-if [ "$#" -ne 9 ]; then
-  echo "Usage: $0 MASTER_NAME MASTER_IP WORKER_NAME WORKER_IP_BASE WORKER_IP_START NUM_OF_VM ADMIN_USERNAME ADMIN_PASSWORD TEMPLATE_BASE" >> $DEPLOY_LOG
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 MASTER_NAME WORKER_NAME TEMPLATE_BASE" >> $DEPLOY_LOG
   exit 1
 fi
 
