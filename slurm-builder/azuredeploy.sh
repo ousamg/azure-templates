@@ -54,7 +54,7 @@ install_prereqs() {
     make && make install
     popd
 
-    echo "Succesfully installed singularity v$(singularity --version)"
+    echo "Successfully installed singularity v$(singularity --version)"
 
     wget $R_URL/$R_PKG
     tar xvf $R_PKG
