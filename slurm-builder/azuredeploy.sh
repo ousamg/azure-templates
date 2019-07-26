@@ -41,7 +41,7 @@ install_prereqs() {
         readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortran \
         perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk \
         java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel
-    yum update -y
+    yum update -y --exclude=WALinuxAgent
 
     wget $SINGULARITY_URL/$SINGULARITY_PKG
     tar xvf $SINGULARITY_PKG
