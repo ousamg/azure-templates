@@ -250,7 +250,7 @@
                       "version": "latest"
                   },
                   "osDisk": {
-                      "name": "[concat(variables('vmNameWorker'), copyindex(),'_OSDisk')]",
+                      "name": "[concat(variables('vmNameWorker'),'_OSDisk')]",
                       "caching": "ReadWrite",
                       "createOption": "FromImage",
                       "managedDisk": {
