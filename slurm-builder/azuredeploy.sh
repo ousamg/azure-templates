@@ -44,7 +44,7 @@ install_prereqs() {
     yum install -y openssl openssl-devel pam-devel numactl numactl-devel hwloc hwloc-devel lua lua-devel \
         readline-devel rrdtool-devel ncurses-devel man2html libibmad libibumad gcc gcc-c++ gcc-gfortran \
         perl-ExtUtils-MakeMaker mariadb-server mariadb-devel nfs-utils java-${JAVA_VERSION}-openjdk libcurl-devel \
-        java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel
+        java-${JAVA_VERSION}-openjdk-devel libarchive-devel squashfs-tools rpm-build bzip2-devel xz-devel git
     yum update -y --exclude=WALinuxAgent
 
     wget $SINGULARITY_URL/$SINGULARITY_PKG
